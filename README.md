@@ -24,6 +24,7 @@ single-shot measurements of Rust code.
   - [Features](#features)
   - [Quickstart](#quickstart)
   - [Goals](#goals)
+  - [Comparison with Criterion-rs](#comparison-with-criterion-rs)
   - [Contributing](#contributing)
   - [Compatibility Policy](#compatibility-policy)
   - [Maintenance](#maintenance)
