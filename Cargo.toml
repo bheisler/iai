@@ -1,0 +1,12 @@
+[package]
+name = "iai"
+version = "0.1.0"
+authors = ["Brook Heisler <redattack34@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+iai_macro = { version = "0.1.0", path = "macro" }
+
+[features]
+real_blackbox = []
+default = []

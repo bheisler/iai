@@ -1,0 +1,20 @@
+[package]
+name = "iai_macro"
+version = "0.1.0"
+authors = ["Brook Heisler <redattack34@gmail.com>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = { version = "1.0", features = ["nightly"] }
+quote = "1.0"
+
+[dev-dependencies]
+iai = { version = "0.1.0", path = "..", default-features = false }
+
+[[bench]]
+name = "test_macro_bench"
+
+[workspace]
