@@ -77,7 +77,7 @@ fn get_arch() -> String {
 fn run_bench(
     arch: &str,
     executable: &str,
-    i: usize,
+    i: isize,
     name: &str,
 ) -> (CachegrindStats, Option<CachegrindStats>) {
     let output_file = PathBuf::from(format!("target/iai/cachegrind.out.{}", name));
@@ -201,6 +201,33 @@ impl CachegrindStats {
             ram_hits,
         }
     }
+    pub fn subtract(&self, calibration: &CachegrindStats) -> CachegrindStats {
+        CachegrindStats {
+            instruction_reads: self
+                .instruction_reads
+                .saturating_sub(calibration.instruction_reads),
+            instruction_l1_misses: self
+                .instruction_l1_misses
+                .saturating_sub(calibration.instruction_l1_misses),
+            instruction_cache_misses: self
+                .instruction_cache_misses
+                .saturating_sub(calibration.instruction_cache_misses),
+            data_reads: self.data_reads.saturating_sub(calibration.data_reads),
+            data_l1_read_misses: self
+                .data_l1_read_misses
+                .saturating_sub(calibration.data_l1_read_misses),
+            data_cache_read_misses: self
+                .data_cache_read_misses
+                .saturating_sub(calibration.data_cache_read_misses),
+            data_writes: self.data_writes.saturating_sub(calibration.data_writes),
+            data_l1_write_misses: self
+                .data_l1_write_misses
+                .saturating_sub(calibration.data_l1_write_misses),
+            data_cache_write_misses: self
+                .data_cache_write_misses
+                .saturating_sub(calibration.data_cache_write_misses),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -225,7 +252,16 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
     if let Some("--iai-run") = args_iter.next().as_deref() {
         // In this branch, we're running under cachegrind, so execute the benchmark as quickly as
         // possible and exit
-        let index: usize = args_iter.next().unwrap().parse().unwrap();
+        let index: isize = args_iter.next().unwrap().parse().unwrap();
+
+        // -1 is used as a signal to do nothing and return. By recording an empty benchmark, we can
+        // subtract out the overhead of dispatching to the right benchmark.
+        if index == -1 {
+            return;
+        }
+
+        let index = index as usize;
+
         (benches[index].1)();
         return;
     }
@@ -237,9 +273,20 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
 
     let arch = get_arch();
 
+    let (calibration, old_calibration) = run_bench(&arch, &executable, -1, "calibration");
+
     for (i, (name, _func)) in benches.iter().enumerate() {
         println!("{}", name);
-        let (stats, old_stats) = run_bench(&arch, &executable, i, name);
+        let (stats, old_stats) = run_bench(&arch, &executable, i as isize, name);
+        let (stats, old_stats) = (
+            stats.subtract(&calibration),
+            match (old_stats, &old_calibration) {
+                (Some(old_stats), Some(old_calibration)) => {
+                    Some(old_stats.subtract(old_calibration))
+                }
+                _ => None,
+            },
+        );
 
         fn signed_short(n: f64) -> String {
             let n_abs = n.abs();
