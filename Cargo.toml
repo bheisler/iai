@@ -4,9 +4,21 @@ version = "0.1.0"
 authors = ["Brook Heisler <redattack34@gmail.com>"]
 edition = "2018"
 
+description = "One-shot benchmarking library"
+repository = "https://github.com/bheisler/iai"
+readme = "README.md"
+keywords = ["iai", "benchmark"]
+categories = ["development-tools::profiling"]
+license = "Apache-2.0/MIT"
+
 [dependencies]
-iai_macro = { version = "0.1.0", path = "macro" }
+iai_macro = { version = "0.1.0", path = "macro", optional = true }
 
 [features]
 real_blackbox = []
+macro = ["iai_macro"]
 default = []
+
+[[bench]]
+name = "test_regular_bench"
+harness = false

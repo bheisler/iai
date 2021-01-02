@@ -4,6 +4,13 @@ version = "0.1.0"
 authors = ["Brook Heisler <redattack34@gmail.com>"]
 edition = "2018"
 
+description = "Custom Test Framework macro for Iai"
+repository = "https://github.com/bheisler/iai"
+readme = "README.md"
+keywords = ["iai", "benchmark", "macro"]
+categories = ["development-tools::profiling"]
+license = "Apache-2.0/MIT"
+
 [lib]
 proc-macro = true
 
