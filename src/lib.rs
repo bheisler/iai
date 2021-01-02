@@ -12,7 +12,10 @@ use std::{
     process::{Command, Stdio},
 };
 
+#[cfg(feature = "macro")]
 pub use iai_macro::iai;
+
+mod macros;
 
 /// A function that is opaque to the optimizer, used to prevent the compiler from
 /// optimizing away computations in a benchmark.
@@ -98,7 +101,7 @@ fn run_bench(
         .arg("--tool=cachegrind")
         // Set some reasonable cache sizes. The exact sizes matter less than having fixed sizes,
         // since otherwise cachegrind would take them from the CPU and make benchmark runs
-        // incomparable between machines.
+        // even more incomparable between machines.
         .arg("--I1=32768,8,64")
         .arg("--D1=32768,8,64")
         .arg("--LL=8388608,16,64")
@@ -201,31 +204,19 @@ impl CachegrindStats {
             ram_hits,
         }
     }
+
+    #[rustfmt::skip]
     pub fn subtract(&self, calibration: &CachegrindStats) -> CachegrindStats {
         CachegrindStats {
-            instruction_reads: self
-                .instruction_reads
-                .saturating_sub(calibration.instruction_reads),
-            instruction_l1_misses: self
-                .instruction_l1_misses
-                .saturating_sub(calibration.instruction_l1_misses),
-            instruction_cache_misses: self
-                .instruction_cache_misses
-                .saturating_sub(calibration.instruction_cache_misses),
+            instruction_reads: self.instruction_reads.saturating_sub(calibration.instruction_reads),
+            instruction_l1_misses: self.instruction_l1_misses.saturating_sub(calibration.instruction_l1_misses),
+            instruction_cache_misses: self.instruction_cache_misses.saturating_sub(calibration.instruction_cache_misses),
             data_reads: self.data_reads.saturating_sub(calibration.data_reads),
-            data_l1_read_misses: self
-                .data_l1_read_misses
-                .saturating_sub(calibration.data_l1_read_misses),
-            data_cache_read_misses: self
-                .data_cache_read_misses
-                .saturating_sub(calibration.data_cache_read_misses),
+            data_l1_read_misses: self.data_l1_read_misses.saturating_sub(calibration.data_l1_read_misses),
+            data_cache_read_misses: self.data_cache_read_misses.saturating_sub(calibration.data_cache_read_misses),
             data_writes: self.data_writes.saturating_sub(calibration.data_writes),
-            data_l1_write_misses: self
-                .data_l1_write_misses
-                .saturating_sub(calibration.data_l1_write_misses),
-            data_cache_write_misses: self
-                .data_cache_write_misses
-                .saturating_sub(calibration.data_cache_write_misses),
+            data_l1_write_misses: self.data_l1_write_misses.saturating_sub(calibration.data_l1_write_misses),
+            data_cache_write_misses: self.data_cache_write_misses.saturating_sub(calibration.data_cache_write_misses),
         }
     }
 }
@@ -255,7 +246,7 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
         let index: isize = args_iter.next().unwrap().parse().unwrap();
 
         // -1 is used as a signal to do nothing and return. By recording an empty benchmark, we can
-        // subtract out the overhead of dispatching to the right benchmark.
+        // subtract out the overhead from startup and dispatching to the right benchmark.
         if index == -1 {
             return;
         }
@@ -273,14 +264,14 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
 
     let arch = get_arch();
 
-    let (calibration, old_calibration) = run_bench(&arch, &executable, -1, "calibration");
+    let (calibration, old_calibration) = run_bench(&arch, &executable, -1, "iai_calibration");
 
     for (i, (name, _func)) in benches.iter().enumerate() {
         println!("{}", name);
         let (stats, old_stats) = run_bench(&arch, &executable, i as isize, name);
         let (stats, old_stats) = (
             stats.subtract(&calibration),
-            match (old_stats, &old_calibration) {
+            match (&old_stats, &old_calibration) {
                 (Some(old_stats), Some(old_calibration)) => {
                     Some(old_stats.subtract(old_calibration))
                 }
@@ -292,12 +283,16 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
             let n_abs = n.abs();
 
             if n_abs < 10.0 {
-                format!("{:+.4}", n)
+                format!("{:+.6}", n)
             } else if n_abs < 100.0 {
-                format!("{:+.3}", n)
+                format!("{:+.5}", n)
             } else if n_abs < 1000.0 {
-                format!("{:+.2}", n)
+                format!("{:+.4}", n)
             } else if n_abs < 10000.0 {
+                format!("{:+.3}", n)
+            } else if n_abs < 100000.0 {
+                format!("{:+.2}", n)
+            } else if n_abs < 1000000.0 {
                 format!("{:+.1}", n)
             } else {
                 format!("{:+.0}", n)
