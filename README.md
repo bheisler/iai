@@ -29,8 +29,6 @@ single-shot measurements of Rust code.
   - [Compatibility Policy](#compatibility-policy)
   - [Maintenance](#maintenance)
   - [License](#license)
-  - [Related Projects](#related-projects)
-  - [Criterion.rs Extensions](#criterionrs-extensions)
 
 ### Features
 
