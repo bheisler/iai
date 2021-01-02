@@ -2,20 +2,6 @@
 
 <div align="center">Experimental One-shot Benchmark Framework in Rust</div>
 
-<!-->
-<div align="center">
-    <a href="https://docs.rs/crate/iai/">Released API Docs</a>
-    |
-    <a href="https://github.com/bheisler/iai/blob/master/CHANGELOG.md">Changelog</a>
-</div>
-
-<div align="center">
-    <a href="https://crates.io/crates/criterion">
-        <img src="https://img.shields.io/crates/v/criterion.svg" alt="Crates.io">
-    </a>
-</div>
--->
-
 Iai is an experimental benchmarking harness that uses Cachegrind to perform extremely precise
 single-shot measurements of Rust code.
 
