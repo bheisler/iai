@@ -139,19 +139,19 @@ fn parse_cachegrind_output(file: &Path) -> CachegrindStats {
 
     for line in BufReader::new(file_in).lines() {
         let line = line.unwrap();
-        if line.starts_with("events: ") {
-            events_line = Some(line["events: ".len()..].trim().to_owned());
+        if let Some(line) = line.strip_prefix("events: ") {
+            events_line = Some(line.trim().to_owned());
         }
-        if line.starts_with("summary: ") {
-            summary_line = Some(line["summary: ".len()..].trim().to_owned());
+        if let Some(line) = line.strip_prefix("summary: ") {
+            summary_line = Some(line.trim().to_owned());
         }
     }
 
     match (events_line, summary_line) {
         (Some(events), Some(summary)) => {
             let events: HashMap<_, _> = events
-                .split(" ")
-                .zip(summary.split(" ").map(|s| {
+                .split_whitespace()
+                .zip(summary.split_whitespace().map(|s| {
                     s.parse::<u64>()
                         .expect("Unable to parse summary line from cachegrind output file")
                 }))
