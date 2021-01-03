@@ -9,13 +9,13 @@ jobs:
       matrix:
         rust:
           - stable
-          - beta
-          - nightly
-          - 1.40.0  # MSRV
+          #- beta
+          #- nightly
+          #- 1.40.0  # MSRV
 
     steps:
       - name: Install valgrind
-        run: sudo apt-get install valgrind
+        run: sudo apt install -y valgrind
 
       - uses: actions/checkout@v2
 
