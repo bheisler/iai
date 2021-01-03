@@ -14,8 +14,8 @@ jobs:
           #- 1.40.0  # MSRV
 
     steps:
-      - name: Install valgrind
-        run: sudo apt install -y valgrind
+      - run: sudo apt-get update
+      - run: sudo apt install -y valgrind
 
       - uses: actions/checkout@v2
 
