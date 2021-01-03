@@ -2,6 +2,10 @@
 
 <div align="center">Experimental One-shot Benchmark Framework in Rust</div>
 
+<div align="center">
+    <img src="https://github.com/bheisler/iai/workflows/Continuous%20integration/badge.svg" alt="Continuous integration">
+</div>
+
 Iai is an experimental benchmarking harness that uses Cachegrind to perform extremely precise
 single-shot measurements of Rust code.
 
