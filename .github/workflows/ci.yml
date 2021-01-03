@@ -11,9 +11,12 @@ jobs:
           - stable
           - beta
           - nightly
-          - 1.31.0  # MSRV
+          - 1.40.0  # MSRV
 
     steps:
+      - name: Install valgrind
+        run: sudo apt-get install valgrind
+
       - uses: actions/checkout@v2
 
       - uses: actions-rs/toolchain@v1
