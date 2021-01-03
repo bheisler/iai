@@ -9,9 +9,9 @@ jobs:
       matrix:
         rust:
           - stable
-          #- beta
-          #- nightly
-          #- 1.40.0  # MSRV
+          - beta
+          - nightly
+          - 1.45.0  # MSRV
 
     steps:
       - run: sudo apt-get update
@@ -24,7 +24,6 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.rust }}
           override: true
-          components: rustfmt, clippy
 
       - run: cargo bench
 
@@ -32,12 +31,30 @@ jobs:
         working-directory: ./macro
         run: cargo bench
 
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+  lint:
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - nightly
 
-      - uses: actions-rs/cargo@v1
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
         with:
-          command: clippy
-          args: -- -D warnings
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+          components: rustfmt, clippy
+
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all -- -D warnings
+
+      - if: ${{ matrix.rust == 'nightly' }}
+        working-directory: ./macro
+        run: cargo fmt --all -- --check
+
+      - if: ${{ matrix.rust == 'nightly' }}
+        working-directory: ./macro
+        run: cargo clippy --all -- -D warnings
