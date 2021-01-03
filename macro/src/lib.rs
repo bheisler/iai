@@ -14,8 +14,6 @@ pub fn iai(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let const_name = Ident::new(&format!("IAI_FUNC_{}", function_name.to_string()), span);
     let name_literal = function_name.to_string();
 
-    let foobar = ();
-
     let output = quote_spanned!(span=>
         #item
 
