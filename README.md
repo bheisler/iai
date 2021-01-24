@@ -6,6 +6,16 @@
     <img src="https://github.com/bheisler/iai/workflows/Continuous%20integration/badge.svg" alt="Continuous integration">
 </div>
 
+<div align="center">
+	<a href="https://bheisler.github.io/criterion.rs/book/iai/getting_started.html">Getting Started</a>
+    |
+    <a href="https://bheisler.github.io/criterion.rs/book/iai.html">User Guide</a>
+    |
+    <a href="https://docs.rs/crate/iai/">Released API Docs</a>
+    |
+    <a href="https://github.com/bheisler/iai/blob/master/CHANGELOG.md">Changelog</a>
+</div>
+
 Iai is an experimental benchmarking harness that uses Cachegrind to perform extremely precise
 single-shot measurements of Rust code.
 
@@ -91,10 +101,6 @@ bench_fibonacci_long
   Estimated Cycles:        35638668
 ```
 
-See the [Getting Started](https://bheisler.github.io/criterion.rs/book/iai/getting_started.html) guide for more details.
-
-TODO: Write that guide.
-
 ### Goals
 
 The primary goal of Iai is to provide a simple and precise tool for reliably detecting very small changes to the performance of code. Additionally, it should be as programmer-friendly as possible and make it easy to create reliable, useful benchmarks.
@@ -126,6 +132,8 @@ Iai gives more precision and scales better to larger benchmarks, while Criterion
 excluding setup time and gives you more information about the actual time your code takes and how
 strongly that is affected by non-determinism like threading or hash-table randomization. If you
 absolutely need to pick one or the other though, Iai is probably the one to go with.
+
+[Cargo-criterion]: https://github.com/bheisler/cargo-criterion
 
 ### Contributing
 
