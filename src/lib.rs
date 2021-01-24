@@ -12,9 +12,6 @@ use std::{
     process::{Command, Stdio},
 };
 
-#[cfg(feature = "macro")]
-pub use iai_macro::iai;
-
 mod macros;
 
 /// A function that is opaque to the optimizer, used to prevent the compiler from
