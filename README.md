@@ -9,7 +9,7 @@
 <div align="center">
 	<a href="https://bheisler.github.io/criterion.rs/book/iai/getting_started.html">Getting Started</a>
     |
-    <a href="https://bheisler.github.io/criterion.rs/book/iai.html">User Guide</a>
+    <a href="https://bheisler.github.io/criterion.rs/book/iai/iai.html">User Guide</a>
     |
     <a href="https://docs.rs/crate/iai/">Released API Docs</a>
     |
