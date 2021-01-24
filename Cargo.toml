@@ -1,6 +1,6 @@
 [package]
 name = "iai"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Brook Heisler <redattack34@gmail.com>"]
 edition = "2018"
 
@@ -12,9 +12,11 @@ categories = ["development-tools::profiling"]
 license = "Apache-2.0/MIT"
 
 [dependencies]
+iai_macro = { version = "0.1.0", path = "macro", optional = true }
 
 [features]
 real_blackbox = []
+macro = ["iai_macro"]
 default = []
 
 [[bench]]
