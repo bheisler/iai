@@ -18,10 +18,10 @@ proc-macro = true
 proc-macro2 = { version = "1.0", features = ["nightly"] }
 quote = "1.0"
 
-[dev-dependencies]
-iai = { version = "0.1.0", path = "..", default-features = false, features = ["macro"] }
+#[dev-dependencies]
+#iai = { version = "0.1.0", path = "..", default-features = false, features = ["macro"] }
 
-[[bench]]
-name = "test_macro_bench"
+#[[bench]]
+#name = "test_macro_bench"
 
 [workspace]
