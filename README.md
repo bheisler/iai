@@ -59,7 +59,7 @@ harness = false
 Next, define a benchmark by creating a file at `$PROJECT/benches/my_benchmark.rs` with the following contents:
 
 ```rust
-use iai::{black_box, main};
+use iai::black_box;
 
 fn fibonacci(n: u64) -> u64 {
     match n {
@@ -74,7 +74,7 @@ fn iai_benchmark_short() -> u64 {
 }
 
 fn iai_benchmark_long() -> u64 {
-    fibonacci(black_box(30));
+    fibonacci(black_box(30))
 }
 
 
