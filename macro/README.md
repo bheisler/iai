@@ -15,6 +15,53 @@ This project is licensed under either of
 
 at your option.
 
+## Example
+
+To use the this, create a benchmark `benches/bench_with_macro.rs` with this content:
+```rust
+#![feature(custom_test_frameworks)]
+#![test_runner(iai::runner)]
+
+use iai::black_box;
+use iai::iai;
+
+fn fibonacci(n: u64) -> u64 {
+    match n {
+        0 | 1 => 1,
+        n => fibonacci(n - 1) + fibonacci(n - 2),
+    }
+}
+
+#[iai]
+fn bench_empty() {
+    return;
+}
+
+#[iai]
+fn bench_fibonacci() -> u64 {
+    fibonacci(black_box(10))
+}
+
+#[iai]
+fn bench_fibonacci_long() -> u64 {
+    fibonacci(black_box(30))
+}
+```
+
+Then add this in your `Cargo.toml`:
+```
+[dev-dependencies]
+iai = { version = "0.1.1", default-features = false, features = ["macro"] }
+
+[[bench]]
+name = "bench_with_macro"
+```
+
+Note that you should not disable the testing harness when using the macro.
+
+Now run the benchmark with `cargo bench`
+
+
 ## Contributing
 
 We welcome all people who want to contribute.
