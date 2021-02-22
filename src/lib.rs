@@ -382,5 +382,5 @@ fn compare_and_print(stats: &StatsPair, calibration: &StatsPair) {
             None => "".to_owned(),
         }
     );
-    println!("");
+    println!();
 }
