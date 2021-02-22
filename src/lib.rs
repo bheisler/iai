@@ -265,16 +265,20 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
     #[cfg(feature = "threadpool")]
     {
         let pool = threadpool::ThreadPool::default();
-        let results = benches.iter().enumerate().map(|(i, &&(name, _f))| {
-            let (tx, rx) = std::sync::mpsc::sync_channel(1);
-            let arch = arch.clone();
-            let executable = executable.clone();
-            pool.execute(move || {
-                let stats_pair = run_bench(&arch, &executable, i as isize, name);
-                tx.send(stats_pair).unwrap()
-            });
-            (name, rx)
-        }).collect::<Vec<_>>();
+        let results = benches
+            .iter()
+            .enumerate()
+            .map(|(i, &&(name, _f))| {
+                let (tx, rx) = std::sync::mpsc::sync_channel(1);
+                let arch = arch.clone();
+                let executable = executable.clone();
+                pool.execute(move || {
+                    let stats_pair = run_bench(&arch, &executable, i as isize, name);
+                    tx.send(stats_pair).unwrap()
+                });
+                (name, rx)
+            })
+            .collect::<Vec<_>>();
 
         for (name, result) in results {
             println!("{}", name);
@@ -297,9 +301,7 @@ fn compare_and_print(stats: &StatsPair, calibration: &StatsPair) {
     let (stats, old_stats) = (
         stats.subtract(&calibration),
         match (&old_stats, &old_calibration) {
-            (Some(old_stats), Some(old_calibration)) => {
-                Some(old_stats.subtract(old_calibration))
-            }
+            (Some(old_stats), Some(old_calibration)) => Some(old_stats.subtract(old_calibration)),
             _ => None,
         },
     );
