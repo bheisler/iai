@@ -77,12 +77,9 @@ fn get_arch() -> String {
         .to_owned()
 }
 
-fn run_bench(
-    arch: &str,
-    executable: &str,
-    i: isize,
-    name: &str,
-) -> (CachegrindStats, Option<CachegrindStats>) {
+type StatsPair = (CachegrindStats, Option<CachegrindStats>);
+
+fn run_bench(arch: &str, executable: &str, i: isize, name: &str) -> StatsPair {
     let output_file = PathBuf::from(format!("target/iai/cachegrind.out.{}", name));
     let old_file = output_file.with_file_name(format!("cachegrind.out.{}.old", name));
     std::fs::create_dir_all(output_file.parent().unwrap()).expect("Failed to create directory");
@@ -263,98 +260,127 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
     }
 
     let arch = get_arch();
+    let calibration_pair = run_bench(&arch, &executable, -1, "iai_calibration");
 
-    let (calibration, old_calibration) = run_bench(&arch, &executable, -1, "iai_calibration");
+    #[cfg(feature = "threadpool")]
+    {
+        let pool = threadpool::ThreadPool::default();
+        let results = benches
+            .iter()
+            .enumerate()
+            .map(|(i, &&(name, _f))| {
+                let (tx, rx) = std::sync::mpsc::sync_channel(1);
+                let arch = arch.clone();
+                let executable = executable.clone();
+                pool.execute(move || {
+                    let stats_pair = run_bench(&arch, &executable, i as isize, name);
+                    tx.send(stats_pair).unwrap()
+                });
+                (name, rx)
+            })
+            .collect::<Vec<_>>();
 
-    for (i, (name, _func)) in benches.iter().enumerate() {
-        println!("{}", name);
-        let (stats, old_stats) = run_bench(&arch, &executable, i as isize, name);
-        let (stats, old_stats) = (
-            stats.subtract(&calibration),
-            match (&old_stats, &old_calibration) {
-                (Some(old_stats), Some(old_calibration)) => {
-                    Some(old_stats.subtract(old_calibration))
-                }
-                _ => None,
-            },
-        );
-
-        fn signed_short(n: f64) -> String {
-            let n_abs = n.abs();
-
-            if n_abs < 10.0 {
-                format!("{:+.6}", n)
-            } else if n_abs < 100.0 {
-                format!("{:+.5}", n)
-            } else if n_abs < 1000.0 {
-                format!("{:+.4}", n)
-            } else if n_abs < 10000.0 {
-                format!("{:+.3}", n)
-            } else if n_abs < 100000.0 {
-                format!("{:+.2}", n)
-            } else if n_abs < 1000000.0 {
-                format!("{:+.1}", n)
-            } else {
-                format!("{:+.0}", n)
-            }
+        for (name, result) in results {
+            println!("{}", name);
+            let stats_pair = result.recv().unwrap();
+            compare_and_print(&stats_pair, &calibration_pair)
         }
-
-        fn percentage_diff(new: u64, old: u64) -> String {
-            if new == old {
-                return " (No change)".to_owned();
-            }
-
-            let new: f64 = new as f64;
-            let old: f64 = old as f64;
-
-            let diff = (new - old) / old;
-            let pct = diff * 100.0;
-
-            format!(" ({:>+6}%)", signed_short(pct))
-        }
-
-        println!(
-            "  Instructions:     {:>15}{}",
-            stats.instruction_reads,
-            match &old_stats {
-                Some(old) => percentage_diff(stats.instruction_reads, old.instruction_reads),
-                None => "".to_owned(),
-            }
-        );
-        let summary = stats.summarize();
-        let old_summary = old_stats.map(|stat| stat.summarize());
-        println!(
-            "  L1 Accesses:      {:>15}{}",
-            summary.l1_hits,
-            match &old_summary {
-                Some(old) => percentage_diff(summary.l1_hits, old.l1_hits),
-                None => "".to_owned(),
-            }
-        );
-        println!(
-            "  L2 Accesses:      {:>15}{}",
-            summary.l3_hits,
-            match &old_summary {
-                Some(old) => percentage_diff(summary.l3_hits, old.l3_hits),
-                None => "".to_owned(),
-            }
-        );
-        println!(
-            "  RAM Accesses:     {:>15}{}",
-            summary.ram_hits,
-            match &old_summary {
-                Some(old) => percentage_diff(summary.ram_hits, old.ram_hits),
-                None => "".to_owned(),
-            }
-        );
-        println!(
-            "  Estimated Cycles: {:>15}{}",
-            summary.cycles(),
-            match &old_summary {
-                Some(old) => percentage_diff(summary.cycles(), old.cycles()),
-                None => "".to_owned(),
-            }
-        );
-        println!();
     }
+
+    #[cfg(not(feature = "threadpool"))]
+    for (i, (name, _f)) in benches.iter().enumerate() {
+        println!("{}", name);
+        let stats_pair = run_bench(&arch, &executable, i as isize, name);
+        compare_and_print(&stats_pair, &calibration_pair)
+    }
+}
+
+fn compare_and_print(stats: &StatsPair, calibration: &StatsPair) {
+    let (stats, old_stats) = stats;
+    let (calibration, old_calibration) = calibration;
+    let (stats, old_stats) = (
+        stats.subtract(&calibration),
+        match (&old_stats, &old_calibration) {
+            (Some(old_stats), Some(old_calibration)) => Some(old_stats.subtract(old_calibration)),
+            _ => None,
+        },
+    );
+
+    fn signed_short(n: f64) -> String {
+        let n_abs = n.abs();
+
+        if n_abs < 10.0 {
+            format!("{:+.6}", n)
+        } else if n_abs < 100.0 {
+            format!("{:+.5}", n)
+        } else if n_abs < 1000.0 {
+            format!("{:+.4}", n)
+        } else if n_abs < 10000.0 {
+            format!("{:+.3}", n)
+        } else if n_abs < 100000.0 {
+            format!("{:+.2}", n)
+        } else if n_abs < 1000000.0 {
+            format!("{:+.1}", n)
+        } else {
+            format!("{:+.0}", n)
+        }
+    }
+
+    fn percentage_diff(new: u64, old: u64) -> String {
+        if new == old {
+            return " (No change)".to_owned();
+        }
+
+        let new: f64 = new as f64;
+        let old: f64 = old as f64;
+
+        let diff = (new - old) / old;
+        let pct = diff * 100.0;
+
+        format!(" ({:>+6}%)", signed_short(pct))
+    }
+
+    println!(
+        "  Instructions:     {:>15}{}",
+        stats.instruction_reads,
+        match &old_stats {
+            Some(old) => percentage_diff(stats.instruction_reads, old.instruction_reads),
+            None => "".to_owned(),
+        }
+    );
+    let summary = stats.summarize();
+    let old_summary = old_stats.map(|stat| stat.summarize());
+    println!(
+        "  L1 Accesses:      {:>15}{}",
+        summary.l1_hits,
+        match &old_summary {
+            Some(old) => percentage_diff(summary.l1_hits, old.l1_hits),
+            None => "".to_owned(),
+        }
+    );
+    println!(
+        "  L2 Accesses:      {:>15}{}",
+        summary.l3_hits,
+        match &old_summary {
+            Some(old) => percentage_diff(summary.l3_hits, old.l3_hits),
+            None => "".to_owned(),
+        }
+    );
+    println!(
+        "  RAM Accesses:     {:>15}{}",
+        summary.ram_hits,
+        match &old_summary {
+            Some(old) => percentage_diff(summary.ram_hits, old.ram_hits),
+            None => "".to_owned(),
+        }
+    );
+    println!(
+        "  Estimated Cycles: {:>15}{}",
+        summary.cycles(),
+        match &old_summary {
+            Some(old) => percentage_diff(summary.cycles(), old.cycles()),
+            None => "".to_owned(),
+        }
+    );
+    println!();
 }

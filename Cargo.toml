@@ -12,6 +12,7 @@ categories = ["development-tools::profiling"]
 license = "Apache-2.0/MIT"
 
 [dependencies]
+threadpool = { version = "1", optional = true }
 iai_macro = { version = "0.1.0", path = "macro", optional = true }
 
 [features]

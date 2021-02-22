@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+- Benchmarks can be run in parallel by using the `threadpool` feature.
+
 ## [0.1.1]
 ### Added
 - Initial implementation.
