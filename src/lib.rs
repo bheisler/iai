@@ -3,6 +3,7 @@
 #[cfg(feature = "real_blackbox")]
 extern crate test;
 
+use cfg_if::cfg_if;
 use std::{
     collections::HashMap,
     env::args,
@@ -77,6 +78,33 @@ fn get_arch() -> String {
         .to_owned()
 }
 
+// Invoke Valgrind, disabling ASLR if possible, which could noise up the results a bit
+cfg_if! {
+    if #[cfg(target_os = "linux")] {
+        fn valgrind(arch: &str) -> Command {
+            let mut cmd = Command::new("setarch");
+            cmd.arg(arch)
+                .arg("-R")
+                .arg("valgrind");
+            cmd
+        }
+    } else if #[cfg(target_os = "freebsd")] {
+        fn valgrind(_arch: &str) -> Command {
+            let mut cmd = Command::new("proccontrol");
+            cmd.arg("-m")
+                .arg("aslr")
+                .arg("-s")
+                .arg("disable");
+            cmd
+        }
+    } else {
+        fn valgrind(_arch: &str) -> Command {
+            // Can't disable ASLR on this platform
+            Command::new("valgrind")
+        }
+    }
+}
+
 fn run_bench(
     arch: &str,
     executable: &str,
@@ -92,12 +120,8 @@ fn run_bench(
         std::fs::copy(&output_file, &old_file).unwrap();
     }
 
-    // Run under setarch to disable ASLR, which could noise up the results a bit
-    let mut cmd = Command::new("setarch");
+    let mut cmd = valgrind(arch);
     let status = cmd
-        .arg(arch)
-        .arg("-R")
-        .arg("valgrind")
         .arg("--tool=cachegrind")
         // Set some reasonable cache sizes. The exact sizes matter less than having fixed sizes,
         // since otherwise cachegrind would take them from the CPU and make benchmark runs
