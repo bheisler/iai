@@ -78,10 +78,14 @@ fn get_arch() -> String {
         .to_owned()
 }
 
-// Invoke Valgrind, disabling ASLR if possible, which could noise up the results a bit
+fn basic_valgrind() -> Command {
+    Command::new("valgrind")
+}
+
+// Invoke Valgrind, disabling ASLR if possible because ASLR could noise up the results a bit
 cfg_if! {
     if #[cfg(target_os = "linux")] {
-        fn valgrind(arch: &str) -> Command {
+        fn valgrind_without_aslr(arch: &str) -> Command {
             let mut cmd = Command::new("setarch");
             cmd.arg(arch)
                 .arg("-R")
@@ -89,7 +93,7 @@ cfg_if! {
             cmd
         }
     } else if #[cfg(target_os = "freebsd")] {
-        fn valgrind(_arch: &str) -> Command {
+        fn valgrind_without_aslr(_arch: &str) -> Command {
             let mut cmd = Command::new("proccontrol");
             cmd.arg("-m")
                 .arg("aslr")
@@ -98,9 +102,9 @@ cfg_if! {
             cmd
         }
     } else {
-        fn valgrind(_arch: &str) -> Command {
+        fn valgrind_without_aslr(_arch: &str) -> Command {
             // Can't disable ASLR on this platform
-            Command::new("valgrind")
+            basic_valgrind()
         }
     }
 }
@@ -110,6 +114,7 @@ fn run_bench(
     executable: &str,
     i: isize,
     name: &str,
+    allow_aslr: bool,
 ) -> (CachegrindStats, Option<CachegrindStats>) {
     let output_file = PathBuf::from(format!("target/iai/cachegrind.out.{}", name));
     let old_file = output_file.with_file_name(format!("cachegrind.out.{}.old", name));
@@ -120,7 +125,11 @@ fn run_bench(
         std::fs::copy(&output_file, &old_file).unwrap();
     }
 
-    let mut cmd = valgrind(arch);
+    let mut cmd = if allow_aslr {
+        basic_valgrind()
+    } else {
+        valgrind_without_aslr(arch)
+    };
     let status = cmd
         .arg("--tool=cachegrind")
         // Set some reasonable cache sizes. The exact sizes matter less than having fixed sizes,
@@ -288,11 +297,14 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
 
     let arch = get_arch();
 
-    let (calibration, old_calibration) = run_bench(&arch, &executable, -1, "iai_calibration");
+    let allow_aslr = std::env::var_os("IAI_ALLOW_ASLR").is_some();
+
+    let (calibration, old_calibration) =
+        run_bench(&arch, &executable, -1, "iai_calibration", allow_aslr);
 
     for (i, (name, _func)) in benches.iter().enumerate() {
         println!("{}", name);
-        let (stats, old_stats) = run_bench(&arch, &executable, i as isize, name);
+        let (stats, old_stats) = run_bench(&arch, &executable, i as isize, name, allow_aslr);
         let (stats, old_stats) = (
             stats.subtract(&calibration),
             match (&old_stats, &old_calibration) {
