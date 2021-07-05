@@ -41,6 +41,8 @@ pub fn black_box<T>(dummy: T) -> T {
     }
 }
 
+use profile::{memory_usage, Bytes};
+
 fn check_valgrind() -> bool {
     let result = Command::new("valgrind")
         .arg("--tool=cachegrind")
@@ -230,11 +232,12 @@ impl CachegrindStats {
 
         let total_memory_rw = self.instruction_reads + self.data_reads + self.data_writes;
         let l1_hits = total_memory_rw - (ram_hits + l3_hits);
-
+        let mem_used = memory_usage().allocated;
         CachegrindSummary {
             l1_hits,
             l3_hits,
             ram_hits,
+            mem_used,
         }
     }
 
@@ -259,6 +262,7 @@ struct CachegrindSummary {
     l1_hits: u64,
     l3_hits: u64,
     ram_hits: u64,
+    mem_used: Bytes,
 }
 impl CachegrindSummary {
     fn cycles(&self) -> u64 {
@@ -391,6 +395,11 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
                 None => "".to_owned(),
             }
         );
+        println!(
+            "  Memory: {:>15}",
+            summary.mem_used
+        );
+
         println!();
     }
 }
