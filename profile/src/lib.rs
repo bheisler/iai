@@ -1,10 +1,10 @@
 //! A collection of tools for profiling rust-analyzer.
 
-mod stop_watch;
-mod memory_usage;
 #[cfg(feature = "cpu_profiler")]
 mod google_cpu_profiler;
 mod hprof;
+mod memory_usage;
+mod stop_watch;
 mod tree;
 
 use std::cell::RefCell;
@@ -106,7 +106,9 @@ impl Drop for CpuSpan {
             let profile_data = std::env::current_dir().unwrap().join("out.profile");
             eprintln!("Profile data saved to:\n\n    {}\n", profile_data.display());
             let mut cmd = std::process::Command::new("pprof");
-            cmd.arg("-svg").arg(std::env::current_exe().unwrap()).arg(&profile_data);
+            cmd.arg("-svg")
+                .arg(std::env::current_exe().unwrap())
+                .arg(&profile_data);
             let out = cmd.output();
 
             match out {

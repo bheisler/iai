@@ -80,7 +80,10 @@ impl<T> fmt::Debug for Idx<T> {
 impl<T> Idx<T> {
     /// Creates a new index from a [`RawIdx`].
     pub fn from_raw(raw: RawIdx) -> Self {
-        Idx { raw, _ty: PhantomData }
+        Idx {
+            raw,
+            _ty: PhantomData,
+        }
     }
 
     /// Converts this index into the underlying [`RawIdx`].
@@ -97,7 +100,10 @@ pub struct Arena<T> {
 
 impl<T: fmt::Debug> fmt::Debug for Arena<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.debug_struct("Arena").field("len", &self.len()).field("data", &self.data).finish()
+        fmt.debug_struct("Arena")
+            .field("len", &self.len())
+            .field("data", &self.data)
+            .finish()
     }
 }
 
@@ -191,7 +197,10 @@ impl<T> Arena<T> {
     pub fn iter(
         &self,
     ) -> impl Iterator<Item = (Idx<T>, &T)> + ExactSizeIterator + DoubleEndedIterator {
-        self.data.iter().enumerate().map(|(idx, value)| (Idx::from_raw(RawIdx(idx as u32)), value))
+        self.data
+            .iter()
+            .enumerate()
+            .map(|(idx, value)| (Idx::from_raw(RawIdx(idx as u32)), value))
     }
 
     /// Returns an iterator over the arena’s mutable elements.
@@ -249,6 +258,8 @@ impl<T> FromIterator<T> for Arena<T> {
     where
         I: IntoIterator<Item = T>,
     {
-        Arena { data: Vec::from_iter(iter) }
+        Arena {
+            data: Vec::from_iter(iter),
+        }
     }
 }

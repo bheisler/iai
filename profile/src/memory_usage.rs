@@ -19,7 +19,9 @@ impl fmt::Display for MemoryUsage {
 impl std::ops::Sub for MemoryUsage {
     type Output = MemoryUsage;
     fn sub(self, rhs: MemoryUsage) -> MemoryUsage {
-        MemoryUsage { allocated: self.allocated - rhs.allocated }
+        MemoryUsage {
+            allocated: self.allocated - rhs.allocated,
+        }
     }
 }
 
@@ -79,11 +81,15 @@ fn memusage_linux() -> MemoryUsage {
     if mallinfo2 == 0 {
         // mallinfo2 does not exist, use mallinfo.
         let alloc = unsafe { libc::mallinfo() }.uordblks as isize;
-        MemoryUsage { allocated: Bytes(alloc) }
+        MemoryUsage {
+            allocated: Bytes(alloc),
+        }
     } else {
         let mallinfo2: fn() -> libc::mallinfo2 = unsafe { std::mem::transmute(mallinfo2) };
         let alloc = mallinfo2().uordblks as isize;
-        MemoryUsage { allocated: Bytes(alloc) }
+        MemoryUsage {
+            allocated: Bytes(alloc),
+        }
     }
 }
 

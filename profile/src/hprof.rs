@@ -26,7 +26,11 @@ pub fn init() {
 }
 
 pub fn init_from(spec: &str) {
-    let filter = if spec.is_empty() { Filter::disabled() } else { Filter::from_spec(spec) };
+    let filter = if spec.is_empty() {
+        Filter::disabled()
+    } else {
+        Filter::from_spec(spec)
+    };
     filter.install();
 }
 
@@ -63,7 +67,10 @@ pub fn span(label: Label) -> ProfileSpan {
 
     let enabled = PROFILING_ENABLED.load(Ordering::Relaxed);
     if enabled && with_profile_stack(|stack| stack.push(label)) {
-        ProfileSpan(Some(ProfilerImpl { label, detail: None }))
+        ProfileSpan(Some(ProfilerImpl {
+            label,
+            detail: None,
+        }))
     } else {
         ProfileSpan(None)
     }
@@ -152,7 +159,9 @@ impl Filter {
 
     fn from_spec(mut spec: &str) -> Filter {
         let longer_than = if let Some(idx) = spec.rfind('>') {
-            let longer_than = spec[idx + 1..].parse().expect("invalid profile longer_than");
+            let longer_than = spec[idx + 1..]
+                .parse()
+                .expect("invalid profile longer_than");
             spec = &spec[..idx];
             Duration::from_millis(longer_than)
         } else {
@@ -167,9 +176,18 @@ impl Filter {
         } else {
             999
         };
-        let allowed =
-            if spec == "*" { HashSet::new() } else { spec.split('|').map(String::from).collect() };
-        Filter { depth, allowed, longer_than, heartbeat_longer_than, version: 0 }
+        let allowed = if spec == "*" {
+            HashSet::new()
+        } else {
+            spec.split('|').map(String::from).collect()
+        };
+        Filter {
+            depth,
+            allowed,
+            longer_than,
+            heartbeat_longer_than,
+            version: 0,
+        }
     }
 
     fn install(mut self) {
@@ -225,7 +243,10 @@ impl ProfileStack {
             return false;
         }
 
-        self.frames.push(Frame { t: Instant::now(), heartbeats: 0 });
+        self.frames.push(Frame {
+            t: Instant::now(),
+            heartbeats: 0,
+        });
         self.messages.start();
         true
     }
@@ -238,11 +259,18 @@ impl ProfileStack {
             self.heartbeat(frame.heartbeats);
             let avg_span = duration / (frame.heartbeats + 1);
             if avg_span > self.filter.heartbeat_longer_than {
-                eprintln!("Too few heartbeats {} ({}/{:?})?", label, frame.heartbeats, duration)
+                eprintln!(
+                    "Too few heartbeats {} ({}/{:?})?",
+                    label, frame.heartbeats, duration
+                )
             }
         }
 
-        self.messages.finish(Message { duration, label, detail });
+        self.messages.finish(Message {
+            duration,
+            label,
+            detail,
+        });
         if self.frames.is_empty() {
             let longer_than = self.filter.longer_than;
             // Convert to millis for comparison to avoid problems with rounding
@@ -275,7 +303,11 @@ fn print(
     out: &mut impl Write,
 ) {
     let current_indent = "    ".repeat(level as usize);
-    let detail = tree[curr].detail.as_ref().map(|it| format!(" @ {}", it)).unwrap_or_default();
+    let detail = tree[curr]
+        .detail
+        .as_ref()
+        .map(|it| format!(" @ {}", it))
+        .unwrap_or_default();
     writeln!(
         out,
         "{}{:5}ms - {}{}",
@@ -294,8 +326,9 @@ fn print(
         if tree[child].duration.as_millis() > longer_than.as_millis() {
             print(tree, child, level + 1, longer_than, out)
         } else {
-            let (total_duration, cnt) =
-                short_children.entry(tree[child].label).or_insert((Duration::default(), 0));
+            let (total_duration, cnt) = short_children
+                .entry(tree[child].label)
+                .or_insert((Duration::default(), 0));
             *total_duration += tree[child].duration;
             *cnt += 1;
         }
@@ -303,13 +336,22 @@ fn print(
 
     for (child_msg, (duration, count)) in short_children.iter() {
         let millis = duration.as_millis();
-        writeln!(out, "    {}{:5}ms - {} ({} calls)", current_indent, millis, child_msg, count)
-            .expect("printing profiling info");
+        writeln!(
+            out,
+            "    {}{:5}ms - {} ({} calls)",
+            current_indent, millis, child_msg, count
+        )
+        .expect("printing profiling info");
     }
 
     let unaccounted = tree[curr].duration - accounted_for;
     if tree.children(curr).next().is_some() && unaccounted > longer_than {
-        writeln!(out, "    {}{:5}ms - ???", current_indent, unaccounted.as_millis())
-            .expect("printing profiling info");
+        writeln!(
+            out,
+            "    {}{:5}ms - ???",
+            current_indent,
+            unaccounted.as_millis()
+        )
+        .expect("printing profiling info");
     }
 }

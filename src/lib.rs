@@ -395,10 +395,7 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
                 None => "".to_owned(),
             }
         );
-        println!(
-            "  Memory: {:>15}",
-            summary.mem_used
-        );
+        println!("  Memory: {:>15}", summary.mem_used);
 
         println!();
     }

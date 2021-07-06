@@ -40,7 +40,10 @@ impl<T> Tree<T> {
     }
 
     pub(crate) fn children(&self, idx: Idx<T>) -> impl Iterator<Item = Idx<T>> + '_ {
-        NodeIter { nodes: &self.nodes, next: self.nodes[idx].first_child }
+        NodeIter {
+            nodes: &self.nodes,
+            next: self.nodes[idx].first_child,
+        }
     }
     pub(crate) fn clear(&mut self) {
         self.nodes.clear();
@@ -63,7 +66,11 @@ pub(crate) struct Node<T> {
 
 impl<T> Node<T> {
     fn new(data: T) -> Node<T> {
-        Node { data, first_child: None, next_sibling: None }
+        Node {
+            data,
+            first_child: None,
+            next_sibling: None,
+        }
     }
 }
 

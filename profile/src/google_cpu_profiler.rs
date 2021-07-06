@@ -21,7 +21,9 @@ const PENDING: usize = 2;
 fn transition(current: usize, new: usize) -> bool {
     static STATE: AtomicUsize = AtomicUsize::new(OFF);
 
-    STATE.compare_exchange(current, new, Ordering::SeqCst, Ordering::SeqCst).is_ok()
+    STATE
+        .compare_exchange(current, new, Ordering::SeqCst, Ordering::SeqCst)
+        .is_ok()
 }
 
 pub(crate) fn start(path: &Path) {

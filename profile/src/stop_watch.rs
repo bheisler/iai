@@ -53,13 +53,19 @@ impl StopWatch {
 
         #[cfg(target_os = "linux")]
         let instructions = self.counter.as_mut().and_then(|it| {
-            it.read().map_err(|err| eprintln!("Failed to read perf counter: {}", err)).ok()
+            it.read()
+                .map_err(|err| eprintln!("Failed to read perf counter: {}", err))
+                .ok()
         });
         #[cfg(not(target_os = "linux"))]
         let instructions = None;
 
         let memory = self.memory.map(|it| MemoryUsage::now() - it);
-        StopWatchSpan { time, instructions, memory }
+        StopWatchSpan {
+            time,
+            instructions,
+            memory,
+        }
     }
 }
 
