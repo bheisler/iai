@@ -59,24 +59,23 @@ harness = false
 Next, define a benchmark by creating a file at `$PROJECT/benches/my_benchmark.rs` with the following contents:
 
 ```rust
-use iai::black_box;
+use iai::{black_box, Iai};
 
 fn fibonacci(n: u64) -> u64 {
     match n {
-        0 => 1,
-        1 => 1,
-        n => fibonacci(n-1) + fibonacci(n-2),
+        0 | 1 => 1,
+        n => fibonacci(n - 1) + fibonacci(n - 2),
     }
 }
 
-fn iai_benchmark_short() -> u64 {
-    fibonacci(black_box(10))
+fn bench_fibonacci(iai: &mut Iai) {
+    iai.run(|| fibonacci(black_box(10)));
 }
 
-fn iai_benchmark_long() -> u64 {
-    fibonacci(black_box(30))
+fn bench_fibonacci_long(iai: &mut Iai) {
+    let target = black_box(2_u64.pow(4) + 7 * 2); // 30
+    iai.run(|| fibonacci(black_box(target)));
 }
-
 
 iai::main!(iai_benchmark_short, iai_benchmark_long);
 ```
@@ -87,18 +86,18 @@ Finally, run this benchmark with `cargo bench`. You should see output similar to
      Running target/release/deps/test_regular_bench-8b173c29ce041afa
 
 bench_fibonacci_short
-  Instructions:                1735
-  L1 Accesses:                 2364
-  L2 Accesses:                    1
-  RAM Accesses:                   1
-  Estimated Cycles:            2404
+  Instructions:                1238
+  L1 Accesses:                 1675
+  L2 Accesses:                    7
+  RAM Accesses:                   3
+  Estimated Cycles:            1815
 
 bench_fibonacci_long
-  Instructions:            26214735
-  L1 Accesses:             35638623
-  L2 Accesses:                    2
-  RAM Accesses:                   1
-  Estimated Cycles:        35638668
+  Instructions:            26214238
+  L1 Accesses:             35637936
+  L2 Accesses:                    7
+  RAM Accesses:                   2
+  Estimated Cycles:        35638041
 ```
 
 ### Goals
@@ -120,12 +119,11 @@ Here's an overview of the important differences:
 - Pro: Although Cachegrind adds considerable runtime overhead, running each benchmark exactly once is still usually faster than Criterion-rs' statistical measurements.
 - Mixed: Because Iai can detect such small changes, it may report performance differences from changes to the order of functions in memory and other compiler details.
 - Con: Iai's measurements merely correlate with wall-clock time (which is usually what you actually care about), where Criterion-rs measures it directly.
-- Con: Iai cannot exclude setup code from the measurements, where Criterion-rs can.
 - Con: Because Cachegrind does not measure system calls, IO time is not accurately measured.
 - Con: Because Iai runs the benchmark exactly once, it cannot measure variation in the performance such as might be caused by OS thread scheduling or hash-table randomization.
 - Limitation: Iai can only be used on platforms supported by Valgrind. Notably, this does not include Windows.
 
-For benchmarks that run in CI (especially if you're checking for performance regressions in pull 
+For benchmarks that run in CI (especially if you're checking for performance regressions in pull
 requests on cloud CI) you should use Iai. For benchmarking on Windows or other platforms that
 Valgrind doesn't support, you should use Criterion-rs. For other cases, I would advise using both.
 Iai gives more precision and scales better to larger benchmarks, while Criterion-rs allows for
@@ -142,7 +140,7 @@ First, thank you for contributing.
 One great way to contribute to Iai is to use it for your own benchmarking needs and report your experiences, file and comment on issues, etc.
 
 Code or documentation improvements in the form of pull requests are also welcome. If you're not
-sure what to work on, try checking the 
+sure what to work on, try checking the
 [Beginner label](https://github.com/bheisler/iai/issues?q=is%3Aissue+is%3Aopen+label%3ABeginner).
 
 If your issues or pull requests have no response after a few days, feel free to ping me (@bheisler).
