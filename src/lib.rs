@@ -359,7 +359,16 @@ pub fn runner(benches: &[&(&'static str, fn(&mut Iai))]) {
 
     let allow_aslr = std::env::var_os("IAI_ALLOW_ASLR").is_some();
 
+    let filtered: Vec<_> = args().skip(1).filter(|arg| !arg.starts_with("--")).collect();
+
     for (i, (name, _func)) in benches.iter().enumerate() {
+        // If filter arguments were passed on the command line, only run the
+        // benchmarks which contain any of the filtered words as substrings of
+        // their names.
+        if !filtered.is_empty() && !filtered.iter().any(|s| name.contains(s)) {
+            continue;
+        }
+
         println!("{}", name);
         let setup_name = name.to_string() + "_setup";
         let i = i as isize;
