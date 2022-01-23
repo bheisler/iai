@@ -2,7 +2,7 @@
 #![test_runner(iai::runner)]
 
 use iai::black_box;
-use iai::iai;
+use iai::{iai, Iai};
 
 fn fibonacci(n: u64) -> u64 {
     match n {
@@ -12,16 +12,19 @@ fn fibonacci(n: u64) -> u64 {
 }
 
 #[iai]
-fn bench_empty() {
-    return;
+fn bench_empty(iai: &mut Iai) {
+    iai.run(|| {
+        return;
+    });
 }
 
 #[iai]
-fn bench_fibonacci() -> u64 {
-    fibonacci(black_box(10))
+fn bench_fibonacci(iai: &mut Iai) {
+    iai.run(|| fibonacci(black_box(10)));
 }
 
 #[iai]
-fn bench_fibonacci_long() -> u64 {
-    fibonacci(black_box(30))
+fn bench_fibonacci_long(iai: &mut Iai) {
+    let target = black_box(2_u64.pow(4) + 7 * 2); // 30
+    iai.run(|| fibonacci(black_box(target)));
 }
