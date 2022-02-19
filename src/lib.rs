@@ -114,7 +114,10 @@ fn run_benches(
     benches: &[&(&'static str, fn())],
     executable: &str,
     allow_aslr: bool,
-) -> (CallgrindStats, Option<CallgrindStats>) {
+) -> (
+    HashMap<String, CallgrindStats>,
+    HashMap<String, CallgrindStats>,
+) {
     let output_file = PathBuf::from("target/iai/callgrind.out");
     let old_file = output_file.with_file_name("callgrind.out.old");
     std::fs::create_dir_all(output_file.parent().unwrap()).expect("Failed to create directory");
@@ -140,6 +143,8 @@ fn run_benches(
         .arg("--LL=8388608,16,64")
         .arg("--cache-sim=yes")
         .arg(format!("--callgrind-out-file={}", output_file.display()))
+        .arg("--compress-strings=no")
+        .arg("--compress-pos=no")
         .arg("--collect-atstart=no");
 
     for (name, _func) in benches.iter() {
@@ -165,54 +170,56 @@ fn run_benches(
 
     let new_stats = parse_callgrind_output(&output_file);
     let old_stats = if old_file.exists() {
-        Some(parse_callgrind_output(&old_file))
+        parse_callgrind_output(&old_file)
     } else {
-        None
+        HashMap::new()
     };
 
     (new_stats, old_stats)
 }
 
-fn parse_callgrind_output(file: &Path) -> CallgrindStats {
+fn parse_callgrind_output(file: &Path) -> HashMap<String, CallgrindStats> {
     let mut events_line = None;
-    let mut summary_line = None;
+    let mut res = HashMap::new();
 
     let file_in = File::open(file).expect("Unable to open callgrind output file");
 
-    for line in BufReader::new(file_in).lines() {
+    let mut lines = BufReader::new(file_in).lines();
+
+    while let Some(line) = lines.next() {
         let line = line.unwrap();
         if let Some(line) = line.strip_prefix("events: ") {
             events_line = Some(line.trim().to_owned());
         }
-        if let Some(line) = line.strip_prefix("summary: ") {
-            summary_line = Some(line.trim().to_owned());
-        }
-    }
-
-    match (events_line, summary_line) {
-        (Some(events), Some(summary)) => {
-            let events: HashMap<_, _> = events
+        if let Some(name) = line.strip_prefix("cfn=__iai_bench_") {
+            let _calls = lines.next().unwrap().unwrap();
+            let data = lines.next().unwrap().unwrap();
+            let data: HashMap<_, _> = events_line
+                .as_deref()
+                .expect("Unable to find events in callgrind output file (must appear early)")
                 .split_whitespace()
-                .zip(summary.split_whitespace().map(|s| {
+                .zip(data.trim().split_whitespace().skip(1).map(|s| {
                     s.parse::<u64>()
                         .expect("Unable to parse summary line from callgrind output file")
                 }))
                 .collect();
-
-            CallgrindStats {
-                instruction_reads: events["Ir"],
-                instruction_l1_misses: events["I1mr"],
-                instruction_cache_misses: events["ILmr"],
-                data_reads: events["Dr"],
-                data_l1_read_misses: events["D1mr"],
-                data_cache_read_misses: events["DLmr"],
-                data_writes: events["Dw"],
-                data_l1_write_misses: events["D1mw"],
-                data_cache_write_misses: events["DLmw"],
-            }
+            res.insert(
+                name.to_owned(),
+                CallgrindStats {
+                    instruction_reads: *data.get("Ir").unwrap_or(&0),
+                    instruction_l1_misses: *data.get("I1mr").unwrap_or(&0),
+                    instruction_cache_misses: *data.get("ILmr").unwrap_or(&0),
+                    data_reads: *data.get("Dr").unwrap_or(&0),
+                    data_l1_read_misses: *data.get("D1mr").unwrap_or(&0),
+                    data_cache_read_misses: *data.get("DLmr").unwrap_or(&0),
+                    data_writes: *data.get("Dw").unwrap_or(&0),
+                    data_l1_write_misses: *data.get("D1mw").unwrap_or(&0),
+                    data_cache_write_misses: *data.get("DLmw").unwrap_or(&0),
+                },
+            );
         }
-        _ => panic!("Unable to parse callgrind output file"),
     }
+    res
 }
 
 #[derive(Clone, Debug)]
@@ -231,6 +238,7 @@ impl CallgrindStats {
     pub fn ram_accesses(&self) -> u64 {
         self.instruction_cache_misses + self.data_cache_read_misses + self.data_cache_write_misses
     }
+
     pub fn summarize(&self) -> CallgrindSummary {
         let ram_hits = self.ram_accesses();
         let l3_accesses =
@@ -244,21 +252,6 @@ impl CallgrindStats {
             l1_hits,
             l3_hits,
             ram_hits,
-        }
-    }
-
-    #[rustfmt::skip]
-    pub fn subtract(&self, calibration: &CallgrindStats) -> CallgrindStats {
-        CallgrindStats {
-            instruction_reads: self.instruction_reads.saturating_sub(calibration.instruction_reads),
-            instruction_l1_misses: self.instruction_l1_misses.saturating_sub(calibration.instruction_l1_misses),
-            instruction_cache_misses: self.instruction_cache_misses.saturating_sub(calibration.instruction_cache_misses),
-            data_reads: self.data_reads.saturating_sub(calibration.data_reads),
-            data_l1_read_misses: self.data_l1_read_misses.saturating_sub(calibration.data_l1_read_misses),
-            data_cache_read_misses: self.data_cache_read_misses.saturating_sub(calibration.data_cache_read_misses),
-            data_writes: self.data_writes.saturating_sub(calibration.data_writes),
-            data_l1_write_misses: self.data_l1_write_misses.saturating_sub(calibration.data_l1_write_misses),
-            data_cache_write_misses: self.data_cache_write_misses.saturating_sub(calibration.data_cache_write_misses),
         }
     }
 }
@@ -301,15 +294,8 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
 
     for (name, _func) in benches.iter() {
         println!("{}", name);
-        // let (stats, old_stats) = (
-        //     stats.subtract(&calibration),
-        //     match (&old_stats, &old_calibration) {
-        //         (Some(old_stats), Some(old_calibration)) => {
-        //             Some(old_stats.subtract(old_calibration))
-        //         }
-        //         _ => None,
-        //     },
-        // );
+        let stats = stats.get(*name).unwrap();
+        let old_stats = old_stats.get(*name);
 
         fn signed_short(n: f64) -> String {
             let n_abs = n.abs();
