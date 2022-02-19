@@ -65,19 +65,6 @@ fn check_valgrind() -> bool {
     }
 }
 
-fn get_arch() -> String {
-    let output = Command::new("uname")
-        .arg("-m")
-        .stdout(Stdio::piped())
-        .output()
-        .expect("Failed to run `uname` to determine CPU architecture.");
-
-    String::from_utf8(output.stdout)
-        .expect("`-uname -m` returned invalid unicode.")
-        .trim()
-        .to_owned()
-}
-
 fn basic_valgrind() -> Command {
     Command::new("valgrind")
 }
@@ -85,7 +72,21 @@ fn basic_valgrind() -> Command {
 // Invoke Valgrind, disabling ASLR if possible because ASLR could noise up the results a bit
 cfg_if! {
     if #[cfg(target_os = "linux")] {
-        fn valgrind_without_aslr(arch: &str) -> Command {
+        fn get_arch() -> String {
+            let output = Command::new("uname")
+                .arg("-m")
+                .stdout(Stdio::piped())
+                .output()
+                .expect("Failed to run `uname` to determine CPU architecture.");
+
+            String::from_utf8(output.stdout)
+                .expect("`-uname -m` returned invalid unicode.")
+                .trim()
+                .to_owned()
+        }
+
+        fn valgrind_without_aslr() -> Command {
+            let arch = get_arch();
             let mut cmd = Command::new("setarch");
             cmd.arg(arch)
                 .arg("-R")
@@ -93,7 +94,7 @@ cfg_if! {
             cmd
         }
     } else if #[cfg(target_os = "freebsd")] {
-        fn valgrind_without_aslr(_arch: &str) -> Command {
+        fn valgrind_without_aslr() -> Command {
             let mut cmd = Command::new("proccontrol");
             cmd.arg("-m")
                 .arg("aslr")
@@ -102,22 +103,20 @@ cfg_if! {
             cmd
         }
     } else {
-        fn valgrind_without_aslr(_arch: &str) -> Command {
+        fn valgrind_without_aslr() -> Command {
             // Can't disable ASLR on this platform
             basic_valgrind()
         }
     }
 }
 
-fn run_bench(
-    arch: &str,
+fn run_benches(
+    benches: &[&(&'static str, fn())],
     executable: &str,
-    i: isize,
-    name: &str,
     allow_aslr: bool,
 ) -> (CallgrindStats, Option<CallgrindStats>) {
-    let output_file = PathBuf::from(format!("target/iai/callgrind.out.{}", name));
-    let old_file = output_file.with_file_name(format!("callgrind.out.{}.old", name));
+    let output_file = PathBuf::from("target/iai/callgrind.out");
+    let old_file = output_file.with_file_name("callgrind.out.old");
     std::fs::create_dir_all(output_file.parent().unwrap()).expect("Failed to create directory");
 
     if output_file.exists() {
@@ -128,9 +127,10 @@ fn run_bench(
     let mut cmd = if allow_aslr {
         basic_valgrind()
     } else {
-        valgrind_without_aslr(arch)
+        valgrind_without_aslr()
     };
-    let status = cmd
+
+    let cmd = cmd
         .arg("--tool=callgrind")
         // Set some reasonable cache sizes. The exact sizes matter less than having fixed sizes,
         // since otherwise callgrind would take them from the CPU and make benchmark runs
@@ -138,10 +138,19 @@ fn run_bench(
         .arg("--I1=32768,8,64")
         .arg("--D1=32768,8,64")
         .arg("--LL=8388608,16,64")
+        .arg("--cache-sim=yes")
         .arg(format!("--callgrind-out-file={}", output_file.display()))
+        .arg("--collect-atstart=no");
+
+    for (name, _func) in benches.iter() {
+        // cmd.arg(format!("--zero-before=__iai_bench_{name}"));
+        // cmd.arg(format!("--dump-after=__iai_bench_{name}"));
+        cmd.arg(format!("--toggle-collect=__iai_bench_{name}"));
+    }
+
+    let status = cmd
         .arg(executable)
         .arg("--iai-run")
-        .arg(i.to_string())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -274,46 +283,33 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
     let executable = args_iter.next().unwrap();
 
     if let Some("--iai-run") = args_iter.next().as_deref() {
-        // In this branch, we're running under callgrind, so execute the benchmark as quickly as
-        // possible and exit
-        let index: isize = args_iter.next().unwrap().parse().unwrap();
-
-        // -1 is used as a signal to do nothing and return. By recording an empty benchmark, we can
-        // subtract out the overhead from startup and dispatching to the right benchmark.
-        if index == -1 {
-            return;
+        // In this branch, we're running under callgrind
+        for (_name, func) in benches.iter() {
+            func();
         }
-
-        let index = index as usize;
-
-        (benches[index].1)();
         return;
     }
-
     // Otherwise we're running normally, under cargo
+
     if !check_valgrind() {
         return;
     }
 
-    let arch = get_arch();
-
     let allow_aslr = std::env::var_os("IAI_ALLOW_ASLR").is_some();
 
-    let (calibration, old_calibration) =
-        run_bench(&arch, &executable, -1, "iai_calibration", allow_aslr);
+    let (stats, old_stats) = run_benches(&benches, &executable, allow_aslr);
 
-    for (i, (name, _func)) in benches.iter().enumerate() {
+    for (name, _func) in benches.iter() {
         println!("{}", name);
-        let (stats, old_stats) = run_bench(&arch, &executable, i as isize, name, allow_aslr);
-        let (stats, old_stats) = (
-            stats.subtract(&calibration),
-            match (&old_stats, &old_calibration) {
-                (Some(old_stats), Some(old_calibration)) => {
-                    Some(old_stats.subtract(old_calibration))
-                }
-                _ => None,
-            },
-        );
+        // let (stats, old_stats) = (
+        //     stats.subtract(&calibration),
+        //     match (&old_stats, &old_calibration) {
+        //         (Some(old_stats), Some(old_calibration)) => {
+        //             Some(old_stats.subtract(old_calibration))
+        //         }
+        //         _ => None,
+        //     },
+        // );
 
         fn signed_short(n: f64) -> String {
             let n_abs = n.abs();
@@ -358,7 +354,7 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
             }
         );
         let summary = stats.summarize();
-        let old_summary = old_stats.map(|stat| stat.summarize());
+        let old_summary = old_stats.clone().map(|stat| stat.summarize());
         println!(
             "  L1 Accesses:      {:>15}{}",
             summary.l1_hits,

@@ -38,6 +38,9 @@ macro_rules! main {
     ( $( $func_name:ident ),+ $(,)* ) => {
         mod iai_wrappers {
             $(
+                #[no_mangle]
+                #[inline(never)]
+                #[export_name = concat!("__iai_bench_", stringify!($func_name))]
                 pub fn $func_name() {
                     let _ = $crate::black_box(super::$func_name());
                 }
