@@ -43,7 +43,7 @@ pub fn black_box<T>(dummy: T) -> T {
 
 fn check_valgrind() -> bool {
     let result = Command::new("valgrind")
-        .arg("--tool=cachegrind")
+        .arg("--tool=callgrind")
         .arg("--version")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -115,9 +115,9 @@ fn run_bench(
     i: isize,
     name: &str,
     allow_aslr: bool,
-) -> (CachegrindStats, Option<CachegrindStats>) {
-    let output_file = PathBuf::from(format!("target/iai/cachegrind.out.{}", name));
-    let old_file = output_file.with_file_name(format!("cachegrind.out.{}.old", name));
+) -> (CallgrindStats, Option<CallgrindStats>) {
+    let output_file = PathBuf::from(format!("target/iai/callgrind.out.{}", name));
+    let old_file = output_file.with_file_name(format!("callgrind.out.{}.old", name));
     std::fs::create_dir_all(output_file.parent().unwrap()).expect("Failed to create directory");
 
     if output_file.exists() {
@@ -131,32 +131,32 @@ fn run_bench(
         valgrind_without_aslr(arch)
     };
     let status = cmd
-        .arg("--tool=cachegrind")
+        .arg("--tool=callgrind")
         // Set some reasonable cache sizes. The exact sizes matter less than having fixed sizes,
-        // since otherwise cachegrind would take them from the CPU and make benchmark runs
+        // since otherwise callgrind would take them from the CPU and make benchmark runs
         // even more incomparable between machines.
         .arg("--I1=32768,8,64")
         .arg("--D1=32768,8,64")
         .arg("--LL=8388608,16,64")
-        .arg(format!("--cachegrind-out-file={}", output_file.display()))
+        .arg(format!("--callgrind-out-file={}", output_file.display()))
         .arg(executable)
         .arg("--iai-run")
         .arg(i.to_string())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
-        .expect("Failed to run benchmark in cachegrind");
+        .expect("Failed to run benchmark in callgrind");
 
     if !status.success() {
         panic!(
-            "Failed to run benchmark in cachegrind. Exit code: {}",
+            "Failed to run benchmark in callgrind. Exit code: {}",
             status
         );
     }
 
-    let new_stats = parse_cachegrind_output(&output_file);
+    let new_stats = parse_callgrind_output(&output_file);
     let old_stats = if old_file.exists() {
-        Some(parse_cachegrind_output(&old_file))
+        Some(parse_callgrind_output(&old_file))
     } else {
         None
     };
@@ -164,11 +164,11 @@ fn run_bench(
     (new_stats, old_stats)
 }
 
-fn parse_cachegrind_output(file: &Path) -> CachegrindStats {
+fn parse_callgrind_output(file: &Path) -> CallgrindStats {
     let mut events_line = None;
     let mut summary_line = None;
 
-    let file_in = File::open(file).expect("Unable to open cachegrind output file");
+    let file_in = File::open(file).expect("Unable to open callgrind output file");
 
     for line in BufReader::new(file_in).lines() {
         let line = line.unwrap();
@@ -186,11 +186,11 @@ fn parse_cachegrind_output(file: &Path) -> CachegrindStats {
                 .split_whitespace()
                 .zip(summary.split_whitespace().map(|s| {
                     s.parse::<u64>()
-                        .expect("Unable to parse summary line from cachegrind output file")
+                        .expect("Unable to parse summary line from callgrind output file")
                 }))
                 .collect();
 
-            CachegrindStats {
+            CallgrindStats {
                 instruction_reads: events["Ir"],
                 instruction_l1_misses: events["I1mr"],
                 instruction_cache_misses: events["ILmr"],
@@ -202,12 +202,12 @@ fn parse_cachegrind_output(file: &Path) -> CachegrindStats {
                 data_cache_write_misses: events["DLmw"],
             }
         }
-        _ => panic!("Unable to parse cachegrind output file"),
+        _ => panic!("Unable to parse callgrind output file"),
     }
 }
 
 #[derive(Clone, Debug)]
-struct CachegrindStats {
+struct CallgrindStats {
     instruction_reads: u64,
     instruction_l1_misses: u64,
     instruction_cache_misses: u64,
@@ -218,11 +218,11 @@ struct CachegrindStats {
     data_l1_write_misses: u64,
     data_cache_write_misses: u64,
 }
-impl CachegrindStats {
+impl CallgrindStats {
     pub fn ram_accesses(&self) -> u64 {
         self.instruction_cache_misses + self.data_cache_read_misses + self.data_cache_write_misses
     }
-    pub fn summarize(&self) -> CachegrindSummary {
+    pub fn summarize(&self) -> CallgrindSummary {
         let ram_hits = self.ram_accesses();
         let l3_accesses =
             self.instruction_l1_misses + self.data_l1_read_misses + self.data_l1_write_misses;
@@ -231,7 +231,7 @@ impl CachegrindStats {
         let total_memory_rw = self.instruction_reads + self.data_reads + self.data_writes;
         let l1_hits = total_memory_rw - (ram_hits + l3_hits);
 
-        CachegrindSummary {
+        CallgrindSummary {
             l1_hits,
             l3_hits,
             ram_hits,
@@ -239,8 +239,8 @@ impl CachegrindStats {
     }
 
     #[rustfmt::skip]
-    pub fn subtract(&self, calibration: &CachegrindStats) -> CachegrindStats {
-        CachegrindStats {
+    pub fn subtract(&self, calibration: &CallgrindStats) -> CallgrindStats {
+        CallgrindStats {
             instruction_reads: self.instruction_reads.saturating_sub(calibration.instruction_reads),
             instruction_l1_misses: self.instruction_l1_misses.saturating_sub(calibration.instruction_l1_misses),
             instruction_cache_misses: self.instruction_cache_misses.saturating_sub(calibration.instruction_cache_misses),
@@ -255,12 +255,12 @@ impl CachegrindStats {
 }
 
 #[derive(Clone, Debug)]
-struct CachegrindSummary {
+struct CallgrindSummary {
     l1_hits: u64,
     l3_hits: u64,
     ram_hits: u64,
 }
-impl CachegrindSummary {
+impl CallgrindSummary {
     fn cycles(&self) -> u64 {
         // Uses Itamar Turner-Trauring's formula from https://pythonspeed.com/articles/consistent-benchmarking-in-ci/
         self.l1_hits + (5 * self.l3_hits) + (35 * self.ram_hits)
@@ -274,7 +274,7 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
     let executable = args_iter.next().unwrap();
 
     if let Some("--iai-run") = args_iter.next().as_deref() {
-        // In this branch, we're running under cachegrind, so execute the benchmark as quickly as
+        // In this branch, we're running under callgrind, so execute the benchmark as quickly as
         // possible and exit
         let index: isize = args_iter.next().unwrap().parse().unwrap();
 
