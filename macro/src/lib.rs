@@ -17,12 +17,12 @@ pub fn iai(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let output = quote_spanned!(span=>
         #item
 
-        fn #wrapper_function_name() {
-            let _ = iai::black_box(#function_name());
+        fn #wrapper_function_name(iai: &mut iai::Iai) {
+            let _ = iai::black_box(#function_name(iai));
         }
 
         #[test_case]
-        const #const_name : (&'static str, fn()) = (#name_literal, #wrapper_function_name);
+        const #const_name : (&'static str, fn(&mut iai::Iai)) = (#name_literal, #wrapper_function_name);
     );
 
     output.into()

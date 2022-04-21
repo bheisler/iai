@@ -21,10 +21,20 @@
 /// Since we've disabled the default benchmark harness, we need to add our own:
 ///
 /// ```ignore
-/// fn bench_method1() {
+/// fn bench_method1(iai: &mut Iai) {
+///     iai.run(|| {
+///         // do something
+///     })
 /// }
 ///
-/// fn bench_method2() {
+/// fn bench_method2(iai: &mut Iai) {
+///     let prepared = some_setup();
+///
+///     // Only the things inside the closure
+///     // will be included in the final results.
+///     iai.run(|| {
+///         // do something with `prepared`
+///     })
 /// }
 ///
 /// iai::main!(bench_method1, bench_method2);
@@ -37,16 +47,17 @@
 macro_rules! main {
     ( $( $func_name:ident ),+ $(,)* ) => {
         mod iai_wrappers {
+            use $crate::Iai;
             $(
-                pub fn $func_name() {
-                    let _ = $crate::black_box(super::$func_name());
+                pub fn $func_name(iai: &mut Iai) {
+                    let _ = $crate::black_box(super::$func_name(iai));
                 }
             )+
         }
 
         fn main() {
 
-            let benchmarks : &[&(&'static str, fn())]= &[
+            let benchmarks : &[&(&'static str, fn(&mut Iai))]= &[
 
                 $(
                     &(stringify!($func_name), iai_wrappers::$func_name),

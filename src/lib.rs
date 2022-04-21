@@ -18,6 +18,52 @@ pub use iai_macro::iai;
 
 mod macros;
 
+/// The benchmark manager.
+///
+/// This struct runs and tracks your benchmarks. A reference to it is obtained
+/// by passing your benchmark function to the [`iai::main`](crate::main) macro.
+/// The signature of functions passed to it should thus be `fn my_bench(iai:
+/// &mut Iai)`. In your benchmark functions, run any setup code you need, and
+/// then call `iai.run` with a closure containing the code you want to measure.
+///
+/// Iai will measure your function twice, once without actually running the
+/// measurement closure such that the impact of the setup code can be excluded.
+///
+/// Every benchmark function has to call `iai.run` exactly least once.
+pub struct Iai {
+    /// Whether the benchmark already (should have) been run, regardless of the
+    /// current `only_runs_setup` mode.
+    ran: bool,
+    /// Whether only setup code or also the benchmark code will be run.
+    only_runs_setup: bool,
+}
+
+impl Iai {
+    fn new(only_runs_setup: bool) -> Self {
+        Self {
+            ran: false,
+            only_runs_setup,
+        }
+    }
+
+    /// Runs the benchmark function.
+    ///
+    /// # Panics
+    /// Panics if the method is called more than once.
+    pub fn run<F, U>(&mut self, mut func: F)
+    where
+        F: FnMut() -> U,
+    {
+        if self.ran {
+            panic!("the run method may only be called once");
+        }
+        self.ran = true;
+        if !self.only_runs_setup {
+            black_box(func());
+        }
+    }
+}
+
 /// A function that is opaque to the optimizer, used to prevent the compiler from
 /// optimizing away computations in a benchmark.
 ///
@@ -40,8 +86,6 @@ pub fn black_box<T>(dummy: T) -> T {
         ret
     }
 }
-
-use profile::{memory_usage, Bytes};
 
 fn check_valgrind() -> bool {
     let result = Command::new("valgrind")
@@ -116,6 +160,7 @@ fn run_bench(
     executable: &str,
     i: isize,
     name: &str,
+    setup_only: bool,
     allow_aslr: bool,
 ) -> (CachegrindStats, Option<CachegrindStats>) {
     let output_file = PathBuf::from(format!("target/iai/cachegrind.out.{}", name));
@@ -132,8 +177,8 @@ fn run_bench(
     } else {
         valgrind_without_aslr(arch)
     };
-    let status = cmd
-        .arg("--tool=cachegrind")
+
+    cmd.arg("--tool=cachegrind")
         // Set some reasonable cache sizes. The exact sizes matter less than having fixed sizes,
         // since otherwise cachegrind would take them from the CPU and make benchmark runs
         // even more incomparable between machines.
@@ -143,7 +188,15 @@ fn run_bench(
         .arg(format!("--cachegrind-out-file={}", output_file.display()))
         .arg(executable)
         .arg("--iai-run")
-        .arg(i.to_string())
+        .arg(i.to_string());
+
+    // If this argument is set, we only run the setup code without the
+    // actual benchmark payload.
+    if setup_only {
+        cmd.arg("--iai-setup");
+    }
+
+    let status = cmd
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -228,16 +281,15 @@ impl CachegrindStats {
         let ram_hits = self.ram_accesses();
         let l3_accesses =
             self.instruction_l1_misses + self.data_l1_read_misses + self.data_l1_write_misses;
-        let l3_hits = l3_accesses - ram_hits;
+        let l3_hits = l3_accesses.saturating_sub(ram_hits);
 
         let total_memory_rw = self.instruction_reads + self.data_reads + self.data_writes;
-        let l1_hits = total_memory_rw - (ram_hits + l3_hits);
-        let mem_used = memory_usage().allocated;
+        let l1_hits = total_memory_rw.saturating_sub(ram_hits + l3_hits);
+
         CachegrindSummary {
             l1_hits,
             l3_hits,
             ram_hits,
-            mem_used,
         }
     }
 
@@ -262,7 +314,6 @@ struct CachegrindSummary {
     l1_hits: u64,
     l3_hits: u64,
     ram_hits: u64,
-    mem_used: Bytes,
 }
 impl CachegrindSummary {
     fn cycles(&self) -> u64 {
@@ -273,7 +324,7 @@ impl CachegrindSummary {
 
 /// Custom-test-framework runner. Should not be called directly.
 #[doc(hidden)]
-pub fn runner(benches: &[&(&'static str, fn())]) {
+pub fn runner(benches: &[&(&'static str, fn(&mut Iai))]) {
     let mut args_iter = args();
     let executable = args_iter.next().unwrap();
 
@@ -282,15 +333,20 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
         // possible and exit
         let index: isize = args_iter.next().unwrap().parse().unwrap();
 
-        // -1 is used as a signal to do nothing and return. By recording an empty benchmark, we can
-        // subtract out the overhead from startup and dispatching to the right benchmark.
-        if index == -1 {
-            return;
-        }
+        // The `--iai-setup` argument is a special signal to indicate that
+        // only setup routines should be run. By recording an empty benchmark,
+        // we can subtract out the overhead from setup and dispatching to the
+        // right benchmark.
+        let only_runs_setup = matches!(args_iter.next().as_deref(), Some("--iai-setup"));
 
         let index = index as usize;
 
-        (benches[index].1)();
+        let mut iai = Iai::new(only_runs_setup);
+        (benches[index].1)(&mut iai);
+        if !iai.ran {
+            panic!("Benchmark {} did not run", benches[index].0);
+        }
+
         return;
     }
 
@@ -303,12 +359,24 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
 
     let allow_aslr = std::env::var_os("IAI_ALLOW_ASLR").is_some();
 
-    let (calibration, old_calibration) =
-        run_bench(&arch, &executable, -1, "iai_calibration", allow_aslr);
+    let filtered: Vec<_> = args().skip(1).filter(|arg| !arg.starts_with("--")).collect();
 
     for (i, (name, _func)) in benches.iter().enumerate() {
+        // If filter arguments were passed on the command line, only run the
+        // benchmarks which contain any of the filtered words as substrings of
+        // their names.
+        if !filtered.is_empty() && !filtered.iter().any(|s| name.contains(s)) {
+            continue;
+        }
+
         println!("{}", name);
-        let (stats, old_stats) = run_bench(&arch, &executable, i as isize, name, allow_aslr);
+        let setup_name = name.to_string() + "_setup";
+        let i = i as isize;
+
+        let (calibration, old_calibration) =
+            run_bench(&arch, &executable, i, &setup_name, true, allow_aslr);
+        let (stats, old_stats) = run_bench(&arch, &executable, i, name, false, allow_aslr);
+
         let (stats, old_stats) = (
             stats.subtract(&calibration),
             match (&old_stats, &old_calibration) {
@@ -395,8 +463,6 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
                 None => "".to_owned(),
             }
         );
-        println!("  Memory: {:>15}", summary.mem_used);
-
         println!();
     }
 }
