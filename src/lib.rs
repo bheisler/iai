@@ -132,6 +132,8 @@ fn run_bench(
     };
     let status = cmd
         .arg("--tool=cachegrind")
+        // https://github.com/bheisler/iai/issues/34
+        .arg("--cache-sim=yes")
         // Set some reasonable cache sizes. The exact sizes matter less than having fixed sizes,
         // since otherwise cachegrind would take them from the CPU and make benchmark runs
         // even more incomparable between machines.
