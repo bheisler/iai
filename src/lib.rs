@@ -135,6 +135,7 @@ fn run_bench(
         // Set some reasonable cache sizes. The exact sizes matter less than having fixed sizes,
         // since otherwise cachegrind would take them from the CPU and make benchmark runs
         // even more incomparable between machines.
+        .arg("--cache-sim=yes")
         .arg("--I1=32768,8,64")
         .arg("--D1=32768,8,64")
         .arg("--LL=8388608,16,64")
